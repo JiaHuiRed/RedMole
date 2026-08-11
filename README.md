@@ -34,6 +34,7 @@ RedMole 是 [Mole](https://github.com/tw93/mole)（macOS 系统清理工具）�
 .\redmole-analyze.exe --json D:\dir    # JSON 输出（脚本友好）
 
 # clean：缓存清理
+.\gui.ps1                 # 可视化面板：勾选 → 一键移入回收站
 .\clean.ps1                # 只检查：列出可回收空间（不删除）
 .\clean.ps1 -Apply         # 执行：移入回收站（可恢复）
 .\clean.ps1 -Apply -Force  # 跳过确认

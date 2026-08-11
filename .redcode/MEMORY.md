@@ -6,12 +6,13 @@
 
 - ✅ analyze 移植完成：编译通过 + 全量测试全绿（3s）+ JSON/overview 实跑验证通过
 - ✅ clean.ps1 完成：dry-run 实测扫出 17.8GB（npm-cache 16.4GB/pip 925MB/Edge 264MB/Chrome 183MB）
-- ✅ README + git init（2 commits：010b1bf 移植、40ae9d4 gitignore）
-- ⏳ 后续可选：TUI 实机体验、clean -Apply 实测、PowerShell 测试
+- ✅ gui.ps1 WinForms 面板：勾选→回收站，零依赖，实机启动验证通过
+- ✅ README（RedStudio 风格）+ CHANGELOG 0.0.1 + LICENSE + git（3 commits）
+- ⏳ 遗留：npm-cache 源目录残留 440MB/35k items（node 进程锁定，重启后自然消失，D:\npm-cache 已完整备份）
 
 ## 关键路径
 
-- 入口：`redmole-analyze.exe`（go build -o redmole-analyze.exe ./cmd/analyze）、`clean.ps1`
+- 入口：`redmole-analyze.exe`、`clean.ps1`、`gui.ps1`（双击/右键 PowerShell 运行）
 - 构建：`$env:GOPROXY=https://goproxy.cn,direct`（GFW，proxy.golang.org 不通）
 - 测试：`go test -timeout 300s ./cmd/analyze`
 - 环境：GOPATH 已迁 D:\go（用户级环境变量），GOPROXY 已 go env -w 持久化
@@ -24,6 +25,9 @@
 4. **8.3 短名 SameFile 陷阱**：C:\Users\Administrator 的 ADMINI~1 短名与长名 os.SameFile 等价命中 → 整棵保护用户目录会误伤自己的 Temp，别用整棵保护
 5. **Pagefile 膨胀（非代码 bug）**：go test 死循环 + 连续编译触发 pagefile.sys 涨到 25GB 吃掉 C 盘 15GB；Windows 自动管理 pagefile 只增不减，重启才收缩
 6. **Go 缓存占 C 盘**：GOPATH 默认 C:\Users\Administrator\go 有 2.3GB 模块缓存 → 已 robocopy /MOVE 到 D:\go
+7. **PowerShell 变量大小写不敏感**：clean.ps1 的 `$paths` 循环变量覆盖了 `-Paths` 参数（$Paths）→ 过滤静默失效。局部变量永远避开参数名
+8. **robocopy 默认重试参数是坑**：/R:1000000 /W:30 遇锁定文件重试 100 万次每次 30 秒 → 卡死 300s+。一律带 /R:1 /W:1
+9. **npm/pnpm 共用 cacache 格式只增不减**：npm-cache 17.6GB 中 _cacache/content-v2 15.4GB 按内容哈希存包本体，重装/升级不回收 → 缓存挪 D 盘（npm config set cache D:\npm-cache + pip config set global.cache-dir D:\pip-cache 已配）
 
 ## 架构决策
 
