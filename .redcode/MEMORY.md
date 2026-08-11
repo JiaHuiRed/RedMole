@@ -6,7 +6,8 @@
 
 - ✅ analyze 移植完成：编译通过 + 全量测试全绿（3s）+ JSON/overview 实跑验证通过
 - ✅ clean.ps1 完成：dry-run 实测扫出 17.8GB（npm-cache 16.4GB/pip 925MB/Edge 264MB/Chrome 183MB）
-- ✅ gui.ps1 WinForms 面板：勾选→回收站，零依赖，实机启动验证通过
+- ✅ gui.ps1 WinForms 面板：缓存清理 + 磁盘分析双 Tab（盘符选择/下钻），实机启动验证通过
+- ✅ 已推送 https://github.com/JiaHuiRed/RedMole.git（master，5 commits）
 - ✅ README（RedStudio 风格）+ CHANGELOG 0.0.1 + LICENSE + git（3 commits）
 - ⏳ 遗留：npm-cache 源目录残留 440MB/35k items（node 进程锁定，重启后自然消失，D:\npm-cache 已完整备份）
 
