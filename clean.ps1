@@ -16,7 +16,8 @@
 param(
     [switch]$Apply,
     [switch]$Force,
-    [switch]$Json
+    [switch]$Json,
+    [string[]]$Paths
 )
 
 $ErrorActionPreference = 'Stop'
@@ -81,20 +82,22 @@ $results = @()
 foreach ($target in $CleanTargets.Keys) {
     $literal = $target.Replace('*', '__WILDCARD__')
     $isWildcard = $target.Contains('*')
-    $paths = @()
+    $candidatePaths = @()
     if ($isWildcard) {
-        $paths = Get-ChildItem -Path $target -File -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+        $candidatePaths = Get-ChildItem -Path $target -File -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
     } else {
-        if (Test-Path -LiteralPath $target) { $paths = @($target) }
+        if (Test-Path -LiteralPath $target) { $candidatePaths = @($target) }
     }
-    foreach ($p in $paths) {
+    foreach ($p in $candidatePaths) {
         if (Test-Protected $p) { continue }
-        $size = if ((Get-Item -LiteralPath $p -Force).PSIsContainer) { Get-DirSize $p } else { (Get-Item -LiteralPath $p -Force).Length }
+        if ($Paths.Count -gt 0 -and $Paths -notcontains $p) { continue }
+        $item = Get-Item -LiteralPath $p -Force
+        $size = if ($item.PSIsContainer) { Get-DirSize $p } else { $item.Length }
         $results += [pscustomobject]@{
             Path  = $p
             Note  = $CleanTargets[$target]
             Size  = $size
-            Kind  = if ((Get-Item -LiteralPath $p -Force).PSIsContainer) { 'dir' } else { 'file' }
+            Kind  = if ($item.PSIsContainer) { 'dir' } else { 'file' }
         }
     }
 }

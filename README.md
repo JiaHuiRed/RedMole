@@ -1,56 +1,95 @@
-# RedMole
+# 🛠 RedMole
 
-[Mole](https://github.com/tw93/mole)（macOS 系统清理工具）的 Windows 移植版，保留其产品哲学：**检查优先、删除可恢复、路径精确、操作留痕**。
+> **Windows 磁盘分析 + 缓存清理工具，来自 macOS 清理工具 Mole 的移植版。**
+> 作者：敏敏 · 基于 Go（Bubble Tea TUI）+ PowerShell 构建，删除一律走回收站。
 
-## 组件
+[![版本](https://img.shields.io/badge/版本-v0.0.1-blue)](CHANGELOG.md)
+[![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-0078d4)](https://github.com/tw93/mole)
+[![Go](https://img.shields.io/badge/Go-1.25-00add8)](https://go.dev)
+[![上游](https://img.shields.io/badge/上游-Mole-ff6b35)](https://github.com/tw93/mole)
+[![许可证](https://img.shields.io/badge/许可证-MIT-lightgrey)](LICENSE)
 
-| 组件 | 说明 |
-|---|---|
-| `redmole-analyze` | Go + Bubble Tea 磁盘分析 TUI（从 Mole `cmd/analyze` 移植）。终端界面浏览目录占用、Top 大文件、删除入口（送回收站） |
-| `clean.ps1` | PowerShell 迷你清理工具：白名单目标、dry-run 默认、回收站路由、操作日志 |
+---
 
-## 构建与使用
+## ✨ 这是什么？
+
+RedMole 是 [Mole](https://github.com/tw93/mole)（macOS 系统清理工具）的 **Windows 移植版**，继承它的产品哲学：**检查优先、删除可恢复、路径精确、操作留痕**。两个入口：`redmole-analyze` 终端磁盘分析（全盘分布 + 大文件 + 目录下钻 + 删除入口），`clean.ps1` 白名单缓存清理（npm / pip / 浏览器缓存等，默认只检查）。
+
+---
+
+## 🧭 核心功能
+
+- 🗺️ **全盘 Overview**：自动枚举所有盘符 + 用户目录 + 隐藏空间洞察（Temp、npm 缓存、旧 Downloads 等），一眼看到空间去哪了
+- 🔍 **目录下钻**：任何目录实时扫描，Top 20 大文件排名，增量过滤
+- 🗑️ **安全删除**：所有删除经 `SHFileOperationW` 送**回收站**，可恢复；系统目录、其他用户目录、AppData（Temp 除外）受保护，拒绝执行
+- 🧹 **clean.ps1 一键检查**：精确白名单目标，dry-run 默认，`-Apply` 才动手
+- 📜 **操作日志**：每次清理写 CSV 到 `%LOCALAPPDATA%\mole\logs\`
+
+## ⌨️ 使用
 
 ```powershell
-# analyze
-go build -o redmole-analyze.exe ./cmd/analyze
-.\redmole-analyze.exe          # 全盘 overview TUI
-.\redmole-analyze.exe D:\some\dir   # 扫指定目录
-.\redmole-analyze.exe --json D:\some\dir   # JSON 输出
+# analyze：终端 TUI
+.\redmole-analyze.exe                  # 全盘 overview
+.\redmole-analyze.exe D:\some\dir      # 扫指定目录
+.\redmole-analyze.exe --json D:\dir    # JSON 输出（脚本友好）
 
-# clean
+# clean：缓存清理
 .\clean.ps1                # 只检查：列出可回收空间（不删除）
 .\clean.ps1 -Apply         # 执行：移入回收站（可恢复）
 .\clean.ps1 -Apply -Force  # 跳过确认
 .\clean.ps1 -Json          # 机器可读输出
 ```
 
-clean 操作日志写在 `%LOCALAPPDATA%\mole\logs\clean-*.csv`。
+---
 
-## 与上游的差异
+## 📁 项目结构
 
-analyze 移植时替换的 macOS 专属依赖：
+```
+RedMole/
+├── redmole-analyze.exe   # 编译产物（go build 生成）
+├── clean.ps1             # 迷你清理工具（白名单 + 回收站 + 日志）
+├── cmd/analyze/          # Go 磁盘分析 TUI（Mole cmd/analyze 移植）
+│   ├── main.go           # 入口：路由 + Overview 构造
+│   ├── scanner.go        # 并发扫描器（原生遍历，无 du/Spotlight）
+│   ├── delete.go         # 回收站删除 + 路径保护（Windows 版）
+│   ├── cache.go          # 分析缓存（%LOCALAPPDATA%\mole\analyzer）
+│   └── insights.go       # 隐藏空间洞察（Windows 路径版）
+└── internal/units/       # 字节格式化
+```
 
-| macOS | Windows |
-|---|---|
-| Spotlight (`mdfind`) 大文件索引 | 原生遍历 |
-| `du` 子进程测量 | 纯 Go 遍历（快路径） |
-| `open` / `osascript` | `explorer` / `rundll32 url.dll,FileProtocolHandler` |
-| `syscall.Statfs` 磁盘剩余 | gopsutil `disk.Usage` |
-| Trash 路由（trash(8) / renameatx_np / Finder） | `SHFileOperationW`（FOF_ALLOWUNDO 送回收站） |
-| 硬链接去重 / APFS 磁盘占用 | 逻辑大小（NTFS 无需） |
-| `~/Library/Caches` 等 macOS 路径 | `%LOCALAPPDATA%`、`%TEMP%`、盘符根 |
-| 保护：`/System` `/Library` bundle | `SystemRoot`、`ProgramFiles`、`ProgramData`、`WinSxS`、其他用户目录、`LOCALAPPDATA` 子树（Temp 除外） |
+---
 
-## 安全设计
+## 🚀 构建
 
-- 删除一律经回收站（`SHFileOperationW` + `FOF_ALLOWUNDO`），可恢复
-- 删除前路径校验：绝对路径、无 traversal、无 null 字节、受保护路径拒绝（`validateTrashTarget`）
-- `clean.ps1` 目标为精确白名单路径，保护清单（会话状态、工具自身目录）硬编码在脚本顶部
-- dry-run 默认：不加 `-Apply` 绝不删任何东西
+```powershell
+go build -o redmole-analyze.exe ./cmd/analyze
+```
 
-## 已知限制
+> 国内网络需先设置镜像：`go env -w GOPROXY=https://goproxy.cn,direct`
 
-- `analyze` 删除行为在 Windows 上无自动化测试（SHFileOperationW 涉及真实 shell 交互）
-- `C:\Windows\Temp` 与需要管理员权限的路径默认跳过
-- pagefile / 系统文件不涉及：本工具只处理用户级可重建缓存
+---
+
+## 🛠 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 分析 TUI | Go + Bubble Tea（跨平台，无 CGO） |
+| 磁盘测量 | gopsutil + 原生遍历（无 du / Spotlight） |
+| 回收站 | shell32 `SHFileOperationW`（FOF_ALLOWUNDO） |
+| 缓存清理 | PowerShell 脚本（.NET / Microsoft.VisualBasic） |
+| 缓存位置 | `%LOCALAPPDATA%\mole\` |
+
+---
+
+## 📋 更新日志
+
+见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
+## 💙 致谢
+
+特别感谢 [tw93/mole](https://github.com/tw93/mole)——RedMole 的磁盘分析与安全删除逻辑源自这个优秀的 macOS 清理工具，本项目的移植建立在它的设计与实现之上。
+
+- 构建者：敏敏
+- 许可证：MIT
