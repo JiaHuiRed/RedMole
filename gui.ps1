@@ -236,7 +236,7 @@ function Invoke-CleanScan {
             $grid.Rows[$idx].Cells[1].Value = $it.Path
             $grid.Rows[$idx].Cells[2].Value = $it.Note
             $grid.Rows[$idx].Cells[3].Value = Format-Size ([int64]$it.Size)
-            $grid.Rows[$idx].Tag = [pscustomobject]@{ Path = $it.Path; Size = [int64]$it.Size }
+            $grid.Rows[$idx].Tag = [pscustomobject]@{ Path = $it.Path; Size = [int64]$it.Size; Mode = $it.Mode }
         }
         if ($items.Count -eq 0) {
             Set-CleanStatus '没有可清理的目标。' ([System.Drawing.Color]::Green)
@@ -263,13 +263,18 @@ function Invoke-CleanSelected {
         return
     }
     $sizeText = Format-Size (($selected | Measure-Object -Property Size -Sum).Sum)
+    $direct = @($selected | Where-Object { $_.Tag.Mode -eq 'direct' })
+    $recycle = @($selected | Where-Object { $_.Tag.Mode -ne 'direct' })
+    $note = ""
+    if ($recycle.Count -gt 0) { $note += "`n$($recycle.Count) 项将移入回收站（可恢复）。" }
+    if ($direct.Count -gt 0) { $note += "`n$($direct.Count) 项（Temp/uv 缓存）将直接删除，不可恢复（仅清 14 天前未修改的项，锁定的自动跳过）。" }
     $answer = [System.Windows.Forms.MessageBox]::Show(
-        "将把 $($selected.Count) 个项目（约 $sizeText）移入回收站。`n回收站里的内容仍占用磁盘，清空回收站后才真正释放空间。`n`n继续？",
+        "将清理 $($selected.Count) 个项目（约 $sizeText）。$note`n`n继续？",
         'RedMole 确认', 'YesNo', 'Warning')
     if ($answer -ne 'Yes') { return }
 
     $cleanBtn.Enabled = $false
-    Set-CleanStatus '正在移入回收站...' ([System.Drawing.Color]::DimGray)
+    Set-CleanStatus '正在清理...' ([System.Drawing.Color]::DimGray)
     try {
         $paths = @($selected | ForEach-Object { $_.Path })
         & pwsh -NoProfile -File $script:CleanScript -Apply -Force -Json -Paths $paths 2>&1 | Out-Null

@@ -3,7 +3,7 @@
 > **Windows 磁盘分析 + 缓存清理工具，来自 macOS 清理工具 Mole 的移植版。**
 > 作者：敏敏 · 基于 Go（Bubble Tea TUI）+ PowerShell 构建，删除一律走回收站。
 
-[![版本](https://img.shields.io/badge/版本-v0.0.1-blue)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v0.0.2-blue)](CHANGELOG.md)
 [![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-0078d4)](https://github.com/tw93/mole)
 [![Go](https://img.shields.io/badge/Go-1.25-00add8)](https://go.dev)
 [![上游](https://img.shields.io/badge/上游-Mole-ff6b35)](https://github.com/tw93/mole)
@@ -22,7 +22,7 @@ RedMole 是 [Mole](https://github.com/tw93/mole)（macOS 系统清理工具）�
 - 🗺️ **全盘 Overview**：自动枚举所有盘符 + 用户目录 + 隐藏空间洞察（Temp、npm 缓存、旧 Downloads 等），一眼看到空间去哪了
 - 🔍 **目录下钻**：任何目录实时扫描，Top 20 大文件排名，增量过滤
 - 🗑️ **安全删除**：所有删除经 `SHFileOperationW` 送**回收站**，可恢复；系统目录、其他用户目录、AppData（Temp 除外）受保护，拒绝执行
-- 🧹 **clean.ps1 一键检查**：精确白名单目标，dry-run 默认，`-Apply` 才动手
+- 🧹 **clean.ps1 一键检查**：精确白名单目标，dry-run 默认，`-Apply` 才动手；小体积缓存走回收站，Temp/uv 大体积目标直接删除（三重安全门槛 + 明细展示）
 - 📜 **操作日志**：每次清理写 CSV 到 `%LOCALAPPDATA%\mole\logs\`
 
 ## ⌨️ 使用
@@ -34,10 +34,11 @@ RedMole 是 [Mole](https://github.com/tw93/mole)（macOS 系统清理工具）�
 .\redmole-analyze.exe --json D:\dir    # JSON 输出（脚本友好）
 
 # clean：缓存清理
-.\gui.ps1                 # 可视化面板：勾选 → 一键移入回收站
+.\gui.ps1                 # 可视化面板：勾选 → 一键清理
 .\clean.ps1                # 只检查：列出可回收空间（不删除）
-.\clean.ps1 -Apply         # 执行：移入回收站（可恢复）
+.\clean.ps1 -Apply         # 执行：小缓存进回收站，Temp/uv 直接删除（默认仅清 14 天前未修改的项）
 .\clean.ps1 -Apply -Force  # 跳过确认
+.\clean.ps1 -MinAgeDays 30 # 收紧/放宽大体积目标的"最近修改"门槛（默认 14 天）
 .\clean.ps1 -Json          # 机器可读输出
 ```
 

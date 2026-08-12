@@ -1,2 +1,6 @@
 *.exe
 .redcode/temp/
+
+# 项目记忆含个人使用习惯与本地路径，不进 git
+.redcode/MEMORY.md
+.redcode/stats/
