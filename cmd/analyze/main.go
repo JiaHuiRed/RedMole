@@ -12,15 +12,23 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/sys/windows"
 	"github.com/shirou/gopsutil/v4/disk"
 )
 
 var (
 	jsonMode = flag.Bool("json", false, "output analysis as JSON instead of TUI")
+	scanDepth = flag.Int("depth", 1, "maximum directory depth for JSON output (0 = unlimited)")
+	topN     = flag.Int("top", 0, "limit output to top N entries by size (0 = all)")
 )
 
 func main() {
 	flag.Parse()
+
+	// When stdout is not a terminal, default to JSON so the tool can be piped.
+	if !isTerminal(os.Stdout.Fd()) && !*jsonMode {
+		*jsonMode = true
+	}
 
 	abs, isOverview, err := resolveScanTarget(os.Getenv("MO_ANALYZE_PATH"), flag.Args())
 	if err != nil {
@@ -30,10 +38,15 @@ func main() {
 
 	go pruneAnalyzerCache()
 	if *jsonMode {
-		runJSONMode(abs, isOverview)
+		runJSONMode(abs, isOverview, *scanDepth, *topN)
 	} else {
 		runTUIMode(abs, isOverview)
 	}
+}
+
+func isTerminal(fd uintptr) bool {
+	var mode uint32
+	return windows.GetConsoleMode(windows.Handle(fd), &mode) == nil
 }
 
 // resolveScanTarget decides which scan a given invocation asks for. Kept

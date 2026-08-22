@@ -3,7 +3,7 @@
 > **Windows 磁盘分析 + 缓存清理工具，来自 macOS 清理工具 Mole 的移植版。**
 > 作者：敏敏 · 基于 Go（Bubble Tea TUI）+ PowerShell 构建，删除一律走回收站。
 
-[![版本](https://img.shields.io/badge/版本-v0.0.2-blue)](CHANGELOG.md)
+[![版本](https://img.shields.io/badge/版本-v0.1.0-blue)](CHANGELOG.md)
 [![平台](https://img.shields.io/badge/平台-Windows%2010%2F11-0078d4)](https://github.com/tw93/mole)
 [![Go](https://img.shields.io/badge/Go-1.25-00add8)](https://go.dev)
 [![上游](https://img.shields.io/badge/上游-Mole-ff6b35)](https://github.com/tw93/mole)
@@ -32,6 +32,8 @@ RedMole 是 [Mole](https://github.com/tw93/mole)（macOS 系统清理工具）�
 .\redmole-analyze.exe                  # 全盘 overview
 .\redmole-analyze.exe D:\some\dir      # 扫指定目录
 .\redmole-analyze.exe --json D:\dir    # JSON 输出（脚本友好）
+.\redmole-analyze.exe --json --depth 2 D:\dir   # 2 层嵌套 JSON
+.\redmole-analyze.exe --json --top 10 C:\        # 只看最大 10 项
 
 # clean：缓存清理
 .\gui.ps1                 # 可视化面板：勾选 → 一键清理

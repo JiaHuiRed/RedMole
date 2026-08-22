@@ -12,32 +12,45 @@ import (
 )
 
 type jsonOutput struct {
-	Path       string          `json:"path"`
-	Overview   bool            `json:"overview"`
-	Entries    []jsonEntry     `json:"entries"`
-	LargeFiles []jsonFileEntry `json:"large_files,omitempty"`
-	TotalSize  int64           `json:"total_size"`
-	TotalFiles int64           `json:"total_files,omitempty"`
+	Path           string        `json:"path"`
+	Overview       bool          `json:"overview"`
+	Entries        []jsonEntry   `json:"entries"`
+	LargeFiles     []jsonFileEntry `json:"large_files,omitempty"`
+	TotalSize      int64         `json:"total_size"`
+	TotalSizeHuman string        `json:"total_size_human,omitempty"`
+	TotalFiles     int64         `json:"total_files,omitempty"`
 }
 
 type jsonEntry struct {
-	Name       string `json:"name"`
-	Path       string `json:"path"`
-	Size       int64  `json:"size"`
-	IsDir      bool   `json:"is_dir"`
-	Insight    bool   `json:"insight,omitempty"`
-	Cleanable  bool   `json:"cleanable,omitempty"`
-	LastAccess string `json:"last_access,omitempty"`
+	Name       string      `json:"name"`
+	Path       string      `json:"path"`
+	Size       int64       `json:"size"`
+	SizeHuman  string      `json:"size_human,omitempty"`
+	IsDir      bool        `json:"is_dir"`
+	Insight    bool        `json:"insight,omitempty"`
+	Cleanable  bool        `json:"cleanable,omitempty"`
+	LastAccess string      `json:"last_access,omitempty"`
+	Entries    []jsonEntry `json:"entries,omitempty"`
 }
 
 type jsonFileEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Size int64  `json:"size"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Size      int64  `json:"size"`
+	SizeHuman string `json:"size_human,omitempty"`
 }
 
-func runJSONMode(path string, isOverview bool) {
-	result := performScanForJSON(path, isOverview)
+func runJSONMode(path string, isOverview bool, depth, topN int) {
+	result := performScanForJSONWithDepth(path, isOverview, depth, topN)
+
+	result.TotalSizeHuman = humanizeBytes(result.TotalSize)
+	for i := range result.Entries {
+		result.Entries[i].SizeHuman = humanizeBytes(result.Entries[i].Size)
+		formatEntriesHuman(&result.Entries[i])
+	}
+	for i := range result.LargeFiles {
+		result.LargeFiles[i].SizeHuman = humanizeBytes(result.LargeFiles[i].Size)
+	}
 
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
@@ -47,25 +60,42 @@ func runJSONMode(path string, isOverview bool) {
 	}
 }
 
-func performScanForJSON(path string, isOverview bool) jsonOutput {
-	if isOverview {
-		return performOverviewScanForJSON(path)
+func formatEntriesHuman(entry *jsonEntry) {
+	entry.SizeHuman = humanizeBytes(entry.Size)
+	for i := range entry.Entries {
+		entry.Entries[i].SizeHuman = humanizeBytes(entry.Entries[i].Size)
+		formatEntriesHuman(&entry.Entries[i])
 	}
-	return performDirectoryScanForJSON(path)
 }
 
-func performDirectoryScanForJSON(path string) jsonOutput {
+func performScanForJSONWithDepth(path string, isOverview bool, depth, topN int) jsonOutput {
+	if isOverview {
+		return performOverviewScanForJSONWithDepth(path, depth, topN)
+	}
+	return performDirectoryScanForJSONWithDepth(path, depth, topN)
+}
+
+func performScanForJSON(path string, isOverview bool) jsonOutput {
+	return performScanForJSONWithDepth(path, isOverview, 1, 0)
+}
+
+func performDirectoryScanForJSONWithDepth(path string, remainingDepth, topN int) jsonOutput {
+	entryLimit := 0
+	if topN > 0 {
+		entryLimit = topN
+	}
+
 	var filesScanned, dirsScanned, bytesScanned int64
 	currentPath := &atomic.Value{}
 	currentPath.Store("")
 
-	result, err := scanPathConcurrentAllEntries(path, &filesScanned, &dirsScanned, &bytesScanned, currentPath)
+	result, err := scanPathConcurrentWithOptions(path, &filesScanned, &dirsScanned, &bytesScanned, currentPath, true, entryLimit)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to scan directory: %v\n", err)
 		os.Exit(1)
 	}
 
-	return jsonOutput{
+	output := jsonOutput{
 		Path:       path,
 		Overview:   false,
 		Entries:    jsonEntriesFromDirEntries(result.Entries, false, nil),
@@ -73,15 +103,38 @@ func performDirectoryScanForJSON(path string) jsonOutput {
 		TotalSize:  result.TotalSize,
 		TotalFiles: result.TotalFiles,
 	}
+
+	if remainingDepth > 1 || remainingDepth <= 0 {
+		childDepth := remainingDepth - 1
+		if remainingDepth <= 0 {
+			childDepth = 0
+		}
+		for i := range output.Entries {
+			if output.Entries[i].IsDir {
+				child := performDirectoryScanForJSONWithDepth(output.Entries[i].Path, childDepth, 0)
+				output.Entries[i].Entries = child.Entries
+			}
+		}
+	}
+
+	return output
 }
 
 func performOverviewScanForJSON(path string) jsonOutput {
+	return performOverviewScanForJSONWithDepth(path, 1, 0)
+}
+
+func performOverviewScanForJSONWithDepth(path string, depth, topN int) jsonOutput {
 	insightEntries := createInsightEntries()
 	overviewEntries := createOverviewEntriesWithInsights(insightEntries)
-	return performOverviewScanForJSONWithEntries(path, insightEntries, overviewEntries)
+	return performOverviewScanForJSONWithEntriesAndDepth(path, insightEntries, overviewEntries, depth, topN)
 }
 
 func performOverviewScanForJSONWithEntries(path string, insightEntries, overviewEntries []dirEntry) jsonOutput {
+	return performOverviewScanForJSONWithEntriesAndDepth(path, insightEntries, overviewEntries, 1, 0)
+}
+
+func performOverviewScanForJSONWithEntriesAndDepth(path string, insightEntries, overviewEntries []dirEntry, depth, topN int) jsonOutput {
 	insightPaths := make(map[string]bool, len(insightEntries))
 	for _, insight := range insightEntries {
 		insightPaths[insight.Path] = true
@@ -102,12 +155,31 @@ func performOverviewScanForJSONWithEntries(path string, insightEntries, overview
 		return entries[i].Size > entries[j].Size
 	})
 
-	return jsonOutput{
+	if topN > 0 && len(entries) > topN {
+		entries = entries[:topN]
+	}
+
+	output := jsonOutput{
 		Path:      path,
 		Overview:  true,
 		Entries:   jsonEntriesFromDirEntries(entries, true, insightPaths),
 		TotalSize: totalSize,
 	}
+
+	if depth > 1 || depth <= 0 {
+		childDepth := depth - 1
+		if depth <= 0 {
+			childDepth = 0
+		}
+		for i := range output.Entries {
+			if output.Entries[i].IsDir && !output.Entries[i].Insight {
+				child := performDirectoryScanForJSONWithDepth(output.Entries[i].Path, childDepth, 0)
+				output.Entries[i].Entries = child.Entries
+			}
+		}
+	}
+
+	return output
 }
 
 func measureOverviewEntriesForJSON(overviewEntries []dirEntry, insightPaths map[string]bool) []dirEntry {
@@ -186,7 +258,11 @@ func jsonEntriesFromDirEntries(entries []dirEntry, isOverview bool, insightPaths
 func jsonFileEntriesFromFileEntries(files []fileEntry) []jsonFileEntry {
 	output := make([]jsonFileEntry, 0, len(files))
 	for _, f := range files {
-		output = append(output, jsonFileEntry(f))
+		output = append(output, jsonFileEntry{
+			Name: f.Name,
+			Path: f.Path,
+			Size: f.Size,
+		})
 	}
 	return output
 }
